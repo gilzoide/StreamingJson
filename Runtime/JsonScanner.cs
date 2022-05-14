@@ -116,7 +116,7 @@ namespace Gilzoide.StreamingJson
                         return true;
                     
                     default:
-                        builder.Append(c);
+                        builder.Append((char) c);
                         break;
                 }
             }
