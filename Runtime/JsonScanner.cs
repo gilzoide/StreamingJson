@@ -16,13 +16,15 @@ namespace Gilzoide.StreamingJson
         
         public JsonScanner(string text) : this(new StringReader(text)) {}
 
-        public static void ReadWhitespace(TextReader reader)
+        public static bool ReadWhitespace(TextReader reader)
         {
             while (char.IsWhiteSpace((char) reader.Peek()))
             {
                 reader.Read();
             }
+            return true;
         }
+        public bool ReadWhitespace() => ReadWhitespace(_reader);
 
         public static bool ReadNull(TextReader reader)
         {
@@ -164,6 +166,27 @@ namespace Gilzoide.StreamingJson
         }
         public static bool ReadNumber(TextReader reader, out string value) => ReadNumber(reader, new StringBuilder(), out value);
         public bool ReadNumber(out string value) => ReadNumber(_reader, _stringBuilder, out value);
+
+        public static bool ReadOpenArray(TextReader reader)
+        {
+            return reader.ReadIf('[');
+        }
+        public bool ReadOpenArray() => ReadOpenArray(_reader);
+        
+        public static bool ReadCloseArray(TextReader reader) => reader.ReadIf(']');
+        public bool ReadCloseArray() => ReadCloseArray(_reader);
+        
+        public static bool ReadValueSeparator(TextReader reader) => reader.ReadIf(',');
+        public bool ReadValueSeparator() => ReadValueSeparator(_reader);
+        
+        public static bool ReadOpenObject(TextReader reader) => reader.ReadIf('{');
+        public bool ReadOpenObject() => ReadOpenObject(_reader);
+        
+        public static bool ReadCloseObject(TextReader reader) => reader.ReadIf('}');
+        public bool ReadCloseObject() => ReadCloseObject(_reader);
+        
+        public static bool ReadKeySeparator(TextReader reader) => reader.ReadIf(':');
+        public bool ReadKeySeparator() => ReadKeySeparator(_reader);
 
         // Private helper methods
         private static bool ReadDigits(TextReader reader, StringBuilder builder)
