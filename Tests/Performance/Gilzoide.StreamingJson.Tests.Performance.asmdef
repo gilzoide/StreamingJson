@@ -1,0 +1,39 @@
+{
+    "name": "Gilzoide.StreamingJson.Tests.Performance",
+    "rootNamespace": "Gilzoide.StreamingJson.Tests.Performance",
+    "references": [
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "Unity.PerformanceTesting",
+        "Gilzoide.StreamingJson"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "Newtonsoft.Json.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "UNITY_EDITOR",
+        "HAVE_UNITY_PERFORMANCE"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.test-framework.performance",
+            "expression": "1.0.0",
+            "define": "HAVE_UNITY_PERFORMANCE"
+        },
+        {
+            "name": "com.unity.nuget.newtonsoft-json",
+            "expression": "1.0.0",
+            "define": "HAVE_NEWTONSOFT_JSON"
+        }
+    ],
+    "noEngineReferences": false
+}
