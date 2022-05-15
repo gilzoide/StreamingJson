@@ -51,14 +51,15 @@ namespace Gilzoide.StreamingJson
                 },
             };
 
+        private static readonly IDictionary<Type, ValueParser<object>> _cachedParsers =
+            new Dictionary<Type, ValueParser<object>>();
+
         private static readonly SerializedFieldsCache _serializedFieldsCache = new SerializedFieldsCache();
 
-        private static readonly GenericMethodInfoCache _parseArray =
-            new GenericMethodInfoCache(typeof(JsonParser), nameof(ParseArray));
-        private static readonly GenericMethodInfoCache _parseList =
-            new GenericMethodInfoCache(typeof(JsonParser), nameof(ParseList));
-        private static readonly GenericMethodInfoCache _parseDictionary =
-            new GenericMethodInfoCache(typeof(JsonParser), nameof(ParseDictionary));
+        private static readonly MethodInfo _parseArray = typeof(JsonParser).GetMethod(nameof(ParseArray));
+        private static readonly MethodInfo _parseICollection = typeof(JsonParser).GetMethod(nameof(ParseICollection));
+        private static readonly MethodInfo _parseIDictionary = typeof(JsonParser).GetMethod(nameof(ParseIDictionary));
+        private static readonly MethodInfo _parseObject = typeof(JsonParser).GetMethod(nameof(ParseObject), new[] { typeof(object).MakeByRefType() });
 
         private readonly JsonScanner _scanner;
 
@@ -114,8 +115,10 @@ namespace Gilzoide.StreamingJson
 
         #region List<T>
 
-        public bool ParseList<T>(ICollection<T> list)
+        public bool ParseICollection<TCollection, T>(out TCollection list) where TCollection : ICollection<T>, new()
         {
+            list = new TCollection();
+            
             if (_scanner.ReadWhitespace() && !_scanner.ReadOpenArray())
             {
                 return false;
@@ -139,10 +142,8 @@ namespace Gilzoide.StreamingJson
 
             return true;
         }
-
-        public bool Parse<T>(ICollection<T> list) => ParseList(list);
-
-        public bool Parse<T>(out List<T> list) => ParseList(list = new List<T>());
+        public bool ParseList<T>(out List<T> list) => ParseICollection<List<T>, T>(out list);
+        public bool Parse<T>(out List<T> list) => ParseList(out list);
 
         private bool ParseArrayValue<T>(ICollection<T> list)
         {
@@ -160,8 +161,7 @@ namespace Gilzoide.StreamingJson
 
         public bool ParseArray<T>(out T[] array)
         {
-            var list = new List<T>();
-            if (!Parse(list))
+            if (!ParseList(out List<T> list))
             {
                 array = null;
                 return false;
@@ -177,8 +177,10 @@ namespace Gilzoide.StreamingJson
 
         #region Dictionary<string, T>
 
-        public bool ParseDictionary<T>(IDictionary<string, T> dict)
+        public bool ParseIDictionary<TDict, T>(out TDict dict) where TDict : IDictionary<string, T>, new()
         {
+            dict = new TDict();
+            
             if (_scanner.ReadWhitespace() && !_scanner.ReadOpenObject())
             {
                 return false;
@@ -202,10 +204,8 @@ namespace Gilzoide.StreamingJson
 
             return true;
         }
-
-        public bool Parse<T>(IDictionary<string, T> dict) => ParseDictionary(dict);
-
-        public bool Parse<T>(out Dictionary<string, T> dict) => Parse(dict = new Dictionary<string, T>());
+        public bool ParseDictionary<T>(out Dictionary<string, T> dict) => ParseIDictionary<Dictionary<string, T>, T>(out dict);
+        public bool Parse<T>(out Dictionary<string, T> dict) => ParseDictionary(out dict);
 
         private bool ParseKeyValuePair<T>(IDictionary<string, T> dict)
         {
@@ -260,6 +260,7 @@ namespace Gilzoide.StreamingJson
 
             return true;
         }
+        public bool ParseObject<T>(out object value) => ParseObject(typeof(T), out value);
 
         private bool ParseField(IReadOnlyDictionary<string, FieldInfo> knownFields, object obj)
         {
@@ -295,36 +296,41 @@ namespace Gilzoide.StreamingJson
 
         public bool ParseAny(Type type, out object value)
         {
-            if (_primitiveParsers.TryGetValue(type, out ValueParser<object> func))
+            if (_primitiveParsers.TryGetValue(type, out ValueParser<object> func)
+                || _cachedParsers.TryGetValue(type, out func))
             {
                 return func(this, out value);
             }
 
             if (type.IsArray)
             {
-                object[] @params = { null };
-                var success = (bool) _parseArray.Get(type.GetElementType())
-                    .Invoke(this, @params);
-                value = @params[0];
-                return success;
+                MethodInfo method = _parseArray.MakeGenericMethod(type.GetElementType());
+                var parseArray = (ValueParser<object>) Delegate.CreateDelegate(typeof(ValueParser<object>), method);
+                _cachedParsers[type] = func = parseArray;
+                return func.Invoke(this, out value);
             }
 
             Type[] genericArguments = type.GetGenericArguments();
             if (genericArguments.Length == 1 && typeof(ICollection<>).MakeGenericType(genericArguments[0]).IsAssignableFrom(type))
             {
-                value = Activator.CreateInstance(type);
-                return (bool) _parseList.Get(genericArguments[0])
-                    .Invoke(this, new[] { value });
+                MethodInfo method = _parseICollection.MakeGenericMethod(type, genericArguments[0]);
+                var parseListDelegate = (ValueParser<object>) Delegate.CreateDelegate(typeof(ValueParser<object>), method);
+                _cachedParsers[type] = func = parseListDelegate;
             }
-
-            if (genericArguments.Length == 2 && typeof(IDictionary<,>).MakeGenericType(typeof(string), genericArguments[1]).IsAssignableFrom(type))
+            else if (genericArguments.Length == 2 && typeof(IDictionary<,>).MakeGenericType(typeof(string), genericArguments[1]).IsAssignableFrom(type))
             {
-                value = Activator.CreateInstance(type);
-                return (bool) _parseDictionary.Get(genericArguments[1])
-                    .Invoke(this, new[] { value });
+                MethodInfo method = _parseIDictionary.MakeGenericMethod(type, genericArguments[1]);
+                var parseDictionaryDelegate = (ValueParser<object>) Delegate.CreateDelegate(typeof(ValueParser<object>), method);
+                _cachedParsers[type] = func = parseDictionaryDelegate;
+            }
+            else
+            {
+                MethodInfo method = _parseObject.MakeGenericMethod(type);
+                var parseObjectDelegate = (ValueParser<object>) Delegate.CreateDelegate(typeof(ValueParser<object>), method);
+                _cachedParsers[type] = func = parseObjectDelegate;
             }
 
-            return ParseObject(type, out value);
+            return func(this, out value);
         }
 
         public bool Parse(Type type, out object value) => ParseAny(type, out value);
