@@ -60,7 +60,7 @@ namespace Gilzoide.StreamingJson
         public static bool ReadInt(TextReader reader, StringBuilder builder, out int value)
         {
             bool isNumber = ReadNumber(reader, builder, out string text);
-            value = isNumber ? int.Parse(text) : 0;
+            value = isNumber ? int.Parse(text) : default;
             return isNumber;
         }
         public static bool ReadInt(TextReader reader, out int value) => ReadInt(reader, new StringBuilder(), out value);
@@ -69,7 +69,7 @@ namespace Gilzoide.StreamingJson
         public static bool ReadLong(TextReader reader, StringBuilder builder, out long value)
         {
             bool isNumber = ReadNumber(reader, builder, out string text);
-            value = isNumber ? long.Parse(text) : 0;
+            value = isNumber ? long.Parse(text) : default;
             return isNumber;
         }
         public static bool ReadLong(TextReader reader, out long value) => ReadLong(reader, new StringBuilder(), out value);
@@ -78,7 +78,7 @@ namespace Gilzoide.StreamingJson
         public static bool ReadFloat(TextReader reader, StringBuilder builder, out float value)
         {
             bool isNumber = ReadNumber(reader, builder, out string text);
-            value = isNumber ? float.Parse(text) : 0;
+            value = isNumber ? float.Parse(text) : default;
             return isNumber;
         }
         public static bool ReadFloat(TextReader reader, out float value) => ReadFloat(reader, new StringBuilder(), out value);
@@ -87,7 +87,7 @@ namespace Gilzoide.StreamingJson
         public static bool ReadDouble(TextReader reader, StringBuilder builder, out double value)
         {
             bool isNumber = ReadNumber(reader, builder, out string text);
-            value = isNumber ? double.Parse(text) : 0;
+            value = isNumber ? double.Parse(text) : default;
             return isNumber;
         }
         public static bool ReadDouble(TextReader reader, out double value) => ReadDouble(reader, new StringBuilder(), out value);
@@ -187,6 +187,47 @@ namespace Gilzoide.StreamingJson
         
         public static bool ReadKeySeparator(TextReader reader) => reader.ReadIf(':');
         public bool ReadKeySeparator() => ReadKeySeparator(_reader);
+
+        public static bool SkipElement(TextReader reader, StringBuilder builder)
+        {
+            ReadWhitespace(reader);
+            switch (reader.Peek())
+            {
+                case 'n': return ReadNull(reader);
+                case 't': return ReadTrue(reader);
+                case 'f': return ReadFalse(reader);
+                case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+                case '-': return ReadNumber(reader, builder, out _);
+                case '"': return ReadString(reader, builder, out _);
+                case '[':
+                    ReadOpenArray(reader);
+                    if (SkipElement(reader, builder))
+                    {
+                        while (ReadWhitespace(reader) && ReadValueSeparator(reader))
+                        {
+                            SkipElement(reader, builder);
+                        }
+                    }
+                    return ReadCloseArray(reader);
+                case '{':
+                    ReadOpenObject(reader);
+                    if (SkipElement(reader, builder) && ReadKeySeparator(reader) && SkipElement(reader, builder))
+                    {
+                        while (ReadWhitespace(reader) && ReadValueSeparator(reader))
+                        {
+                            SkipElement(reader, builder);
+                            ReadWhitespace(reader);
+                            ReadKeySeparator(reader);
+                            SkipElement(reader, builder);
+                        }
+                    }
+                    return ReadCloseObject(reader);
+                default:
+                    return false;
+            }
+        }
+        public static bool SkipElement(TextReader reader) => SkipElement(reader, new StringBuilder());
+        public bool SkipElement() => SkipElement(_reader, _stringBuilder); 
 
         // Private helper methods
         private static bool ReadDigits(TextReader reader, StringBuilder builder)
